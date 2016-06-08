@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding=UTF8
 
-import xml.etree.ElementTree as et, collections as coll
+import xml.etree.ElementTree as et, collections as coll, copy, sha
 
 
 class Connection(object):
@@ -9,41 +9,61 @@ class Connection(object):
     Returns connection details.
     """
 
-    ds_dbname = None
-    """DB name."""
+    c_keys = None
+    """Dictionary with connection parameters."""
 
-    ds_host = None
-    """Host."""
-
-    ds_port = None
-    """Port."""
-
-    ds_user = None
-    """User."""
-
-    ds_password = None
-    """Password."""
-
+    
     def __init__(self, initObject=None):
         """
         Constructor.
 
         :param initObject: Object to initialize the connection from.
-        :type initObject: quartic.core.DataSource
+        :type initObject: quartic.core.DataSource or dictionary in the form {"dbname": "dbname", "host": "host", "port": "port", "user": "user", "password": "password"}
         """
-        if isinstance(initObject, DataSource):
-            self.ds_dbname = initObject["dbname"]
-            self.ds_host = initObject["host"]
-            self.ds_port = initObject["port"]
-            self.ds_user = initObject["user"]
-            self.ds_password = initObject["password"]
+        self.c_keys = {"dbname": None, "host": None, "port": None, "user": None, "password": None}
+        
+        if isinstance(initObject, DataSource) or isinstance(initObject, dict):
+            self["dbname"] = initObject["dbname"]
+            self["host"] = initObject["host"]
+            self["port"] = initObject["port"]
+            self["user"] = initObject["user"]
+            self["password"] = initObject["password"]
+
+            
+    def __getitem__(self, key):
+        """
+        Returns a member of ds_keys.
+
+        :param key: Key to return.
+        :type key: String
+        """
+        return self.c_keys[key]
 
 
+    def __hash__(self):
+        """
+        Computes the hash of the object. Used to create sets.
+        """
+        return int(sha.new(str(self)).hexdigest(), 16)
+        
+
+    def __setitem__(self, key, value):
+        """
+        Sets a member of ds_keys.
+
+        :param key: Key to set.
+        :type key: String
+        :param value: Value to set the key to.
+        :type value: String
+        """
+        self.c_keys[key]=value
+
+            
     def __str__(self):
         """
         String representation of Connection.
         """
-        return "%s %s %s %s %s" % (self.ds_dbname, self.ds_host, self.ds_port, self.ds_user, self.ds_password)
+        return "%s %s %s %s %s" % (self["dbname"], self["host"], self["port"], self["user"], self["password"])
 
 
     def __eq__(self, conn):
@@ -53,17 +73,10 @@ class Connection(object):
         :param conn: Another Connection.
         :type conn: quartic.core.Connection
         """
-        if self.ds_dbname<>conn.ds_dbname:
+        if self.c_keys==conn.c_keys:
+            return True
+        else:
             return False
-        if self.ds_host<>conn.ds_host:
-            return False        
-        if self.ds_port<>conn.ds_port:
-            return False
-        if self.ds_user<>conn.ds_user:
-            return False                    
-        if self.ds_password<>conn.ds_password:
-            return False
-        return True
 
     
                 
@@ -120,6 +133,13 @@ class DataSource(object):
         """
         return str(self.ds_keys)
 
+    
+    def __hash__(self):
+        """
+        Computes the hash of the object. Used to create sets.
+        """
+        return int(sha.new(str(self)).hexdigest(), 16)
+    
 
     def __eq__(self, other):
         """
@@ -162,22 +182,23 @@ class DataSource(object):
         return Connection(self)
 
     
-    def rebuild(self, dbname=None, host=None, port=None, user=None, password=None):
+    def reconnect(self, connection):
         """
         Rebuilds the datasource string with new database parameters.
 
-        :param dbname: New database name.
-        :type dbname: String
-        :param host: New database host.
-        :type host: String
-        :param port: New database port.
-        :type port: String
-        :param user: New database user.
-        :type user: String
-        :param password: New password.
-        :type password: String
+        :param connection: A Connection object with connection data.
+        :type dbname: quartic.core.Connection
+        :return: A new quartic.core.DataSource with connection parameters changed.
         """
-        pass
+        out = copy.deepcopy(self)
+
+        out["dbname"] = connection["dbname"]
+        out["host"] = connection["host"]
+        out["port"] = connection["port"]
+        out["user"] = connection["user"]
+        out["password"] = connection["password"]
+
+        return out
 
     
 
@@ -244,3 +265,6 @@ class Project(object):
         """
 
         return set([str(i) for i in self.getConnections()])
+
+
+    def reconnect(self, 

@@ -19,6 +19,25 @@ class TestQuartic:
     def test_quartic(self):
         p = q.Project("pytest_quartic/test_data/Database_catastro.qgs")
 
-        print p.printDataSources()
-        print p.printConnections()
-       
+        new_conn = q.Connection({"dbname": "a_database", "host": "the_host", "port": "5432", "user": "the_user", "password": "the_pass"})
+
+        c = q.Connection()
+
+        # print c
+        
+        # print new_conn
+
+        # print c==new_conn
+        
+        datasources = p.getDataSources()
+
+        # print datasources[0]
+
+        # print datasources[0].reconnect(new_conn)
+
+        print set(p.getConnections())
+
+        # print set(p.getDataSources())
+        
+
+        # reconnection = {"from": 
