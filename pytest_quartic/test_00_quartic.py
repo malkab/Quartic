@@ -3,9 +3,8 @@
 
 # import unittest as t, time
 import quartic.core as q
-import pytest_quartic.test_data.returned_data as rd
 reload(q)
-reload(rd)
+
 
 """
 Tests for Quartic.
@@ -19,25 +18,21 @@ class TestQuartic:
     def test_quartic(self):
         p = q.Project("pytest_quartic/test_data/Database_catastro.qgs")
 
-        new_conn = q.Connection({"dbname": "a_database", "host": "the_host", "port": "5432", "user": "the_user", "password": "the_pass"})
+        print
+        print p.getDifferentConnections()
 
-        c = q.Connection()
-
-        # print c
+        assert p.getDifferentConnections()==set(["'catastro' localhost 5435 'catastro_admin' 'catastro_admin'"])
         
-        # print new_conn
+        newConn = q.Connection({"dbname": "a_database", "host": "the_host", "port": "5432",
+                                "user": "the_user", "password": "the_pass"})
 
-        # print c==new_conn
+        oldConn = q.Connection({"dbname": "'catastro'", "host": "localhost", "port": "5435",
+                                "user": "'catastro_admin'", "password": "'catastro_admin'"})
         
-        datasources = p.getDataSources()
+        p.reconnect(oldConn, newConn)
 
-        # print datasources[0]
+        print p.getDifferentConnections()
 
-        # print datasources[0].reconnect(new_conn)
+        assert p.getDifferentConnections()==set(["'a_database' the_host 5432 'the_user' 'the_pass'"])
 
-        print set(p.getConnections())
-
-        # print set(p.getDataSources())
-        
-
-        # reconnection = {"from": 
+        p.write("pytest_quartic/test_data/Rewritten.qgs")

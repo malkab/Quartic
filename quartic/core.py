@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # coding=UTF8
 
-import xml.etree.ElementTree as et, collections as coll, copy, sha
+import xml.etree.ElementTree as et, collections as coll, sha
 
 
 class Connection(object):
@@ -24,10 +24,21 @@ class Connection(object):
         
         if isinstance(initObject, DataSource) or isinstance(initObject, dict):
             self["dbname"] = initObject["dbname"]
+            
+            if "'" not in self["dbname"]:
+                self["dbname"] = "'%s'" % self["dbname"]
+                
             self["host"] = initObject["host"]
             self["port"] = initObject["port"]
             self["user"] = initObject["user"]
+
+            if "'" not in self["user"]:
+                self["user"] = "'%s'" % self["user"]
+            
             self["password"] = initObject["password"]
+
+            if "'" not in self["password"]:
+                self["password"] = "'%s'" % self["password"]
 
             
     def __getitem__(self, key):
@@ -91,14 +102,21 @@ class DataSource(object):
     ds_keys = None
     """Dictionary with key/values of datasource string parsing."""
 
+    xmlElement = None
+    """XML ElementTree the datasource is defined in."""
+
     
-    def __init__(self, datasource=None):
+    def __init__(self, datasource=None, xmlElement=None):
         """
         Constructor.
 
-        :param datasource: datasource string of a QGIS project. Optional. If present, is parsed.
+        :param datasource: Data source string of a QGIS project. Optional. If present, is parsed.
         :type datasource: String
+        :param xmlElement: XML element the datasource is defined in.
+        :type xmlElement: xml.etree.ElementTree
         """
+        self.xmlElement = xmlElement
+        
         if datasource is not None:
             self.datasource = datasource
             self.ds_keys = coll.OrderedDict()
@@ -175,6 +193,9 @@ class DataSource(object):
             self.ds_keys[key] = value
             a = b[2].partition("=")
 
+        if "sql" not in self.ds_keys.keys():
+            self.ds_keys["sql"] = ""
+            
         return self.ds_keys
 
 
@@ -188,17 +209,26 @@ class DataSource(object):
 
         :param connection: A Connection object with connection data.
         :type dbname: quartic.core.Connection
-        :return: A new quartic.core.DataSource with connection parameters changed.
         """
-        out = copy.deepcopy(self)
+        
+        self["dbname"] = connection["dbname"]
+        self["host"] = connection["host"]
+        self["port"] = connection["port"]
+        self["user"] = connection["user"]
+        self["password"] = connection["password"]
 
-        out["dbname"] = connection["dbname"]
-        out["host"] = connection["host"]
-        out["port"] = connection["port"]
-        out["user"] = connection["user"]
-        out["password"] = connection["password"]
 
-        return out
+    def getDataSourceString(self):
+        """
+        Outputs the datasource connection string.
+        """
+
+        out = ""
+        
+        for k,v in self.ds_keys.iteritems():
+            out = out+(" %s=%s" % (k, v))
+
+        return out.strip()
 
     
 
@@ -210,6 +240,9 @@ class Project(object):
     project = None
     """Project file to analyze."""
 
+    tree = None
+    """Project XML representation."""
+
     
     def __init__(self, project):
         """
@@ -219,15 +252,15 @@ class Project(object):
         :type project: String
         """
         self.project = project
-
+        self.tree = et.parse(self.project)
+        
 
     def getDataSources(self):
         """
         Get all different data sources in project.
         """
 
-        tree = et.parse(self.project)
-        layers = tree.getroot().find("projectlayers").findall("maplayer")
+        layers = self.tree.getroot().find("projectlayers").findall("maplayer")
         layerdatasource = []
         
         for i in layers:
@@ -236,13 +269,13 @@ class Project(object):
             if provider is not None:
                 if provider.text=="postgres":
                     datasource = i.find("datasource").text
-                    ds = DataSource(datasource)
+                    ds = DataSource(datasource, i.find("datasource"))
                     layerdatasource.append(ds)
                     
         return layerdatasource
 
 
-    def printDataSources(self):
+    def getDifferentDataSources(self):
         """
         Prints all different DataSources.
         """
@@ -259,7 +292,7 @@ class Project(object):
         return [i.getConnection() for i in ds]
 
 
-    def printConnections(self):
+    def getDifferentConnections(self):
         """
         Prints all different connections.
         """
@@ -267,4 +300,28 @@ class Project(object):
         return set([str(i) for i in self.getConnections()])
 
 
-    def reconnect(self, 
+    def reconnect(self, oldConn, newConn):
+        """
+        Reconnect DataSources with a given connection to a new connection.
+
+        :param oldConn: Old connection to replace.
+        :type oldConn: quartic.core.Connection
+        :param newConn: New connection.
+        :type newConn: quartic.core.Connection
+        """
+
+        for i in self.getDataSources():
+            if i.getConnection()==oldConn:
+                i.reconnect(newConn)
+                i.xmlElement.text=i.getDataSourceString()
+
+
+    def write(self, fileName):
+        """
+        Rewrites the project file.
+
+        :param fileName: File name.
+        :type fileName: String
+        """
+        
+        self.tree.write(fileName)
